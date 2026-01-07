@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocuVerify - Debug Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; background-color: #f3f4f6; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="p-5">
+
+    <div class="max-w-2xl mx-auto bg-white p-6 rounded shadow-lg">
+        <h1 class="text-2xl font-bold mb-4 text-center">DocuVerify (Debug Mode)</h1>
+        
+        <div id="status-box" class="bg-yellow-100 p-3 mb-5 text-sm rounded">
+            ⏳ Menghubungkan ke Supabase...
+        </div>
+
+        <div class="flex space-x-2 mb-6 border-b pb-2">
+            <button onclick="switchTab('verify')" class="px-4 py-2 font-bold text-blue-600 bg-blue-50 rounded">Verifikasi</button>
+            <button onclick="switchTab('register')" class="px-4 py-2 font-bold text-gray-600 hover:bg-gray-100 rounded">Registrasi</button>
+        </div>
+
+        <div id="view-verify">
+            <h2 class="font-bold mb-2">Cek Keaslian Dokumen</h2>
+            <input type="file" id="file-verify" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border p-2 rounded mb-4">
+            <button onclick="processVerify()" class="bg-blue-600 text-white px-4 py-2 rounded w-full hover:bg-blue-700">🔍 Cek Sekarang</button>
+            <div id="result-verify" class="mt-4"></div>
+        </div>
+
+        <div id="view-register" class="hidden">
+            <h2 class="font-bold mb-2">Daftarkan Dokumen Baru</h2>
+            <input type="file" id="file-register" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:bg-green-50 file:text-green-700 border p-2 rounded mb-4">
+            
+            <div class="bg-gray-50 p-4 rounded border">
+                <p class="text-xs font-mono text-gray-500 mb-2">Hash: <span id="hash-preview">-</span></p>
+                <input type="text" id="reg-name" placeholder="Nama Pemilik" class="w-full border p-2 rounded mb-2">
+                <input type="text" id="reg-nik" placeholder="NIK" class="w-full border p-2 rounded mb-2">
+                <input type="email" id="reg-email" placeholder="Email" class="w-full border p-2 rounded mb-2">
+                <textarea id="reg-desc" placeholder="Keterangan" class="w-full border p-2 rounded mb-2"></textarea>
+                <button onclick="processRegister()" class="bg-green-600 text-white px-4 py-2 rounded w-full hover:bg-green-700">💾 Simpan Data</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. SETUP SUPABASE ---
+        // MASUKKAN KUNCI ANDA DI SINI DENGAN HATI-HATI
+        const SUPABASE_URL = 'https://lsldiwceibnojlmzsbbj.supabase.co'; 
+        const SUPABASE_KEY = 'sb_secret_p8H-hoPH0EuHsR0qTSFzfA_FwpsQCMP'; 
+
+        // Cek Library
+        let supabase;
+        try {
+            if (!window.supabase) throw new Error("Library Supabase gagal dimuat.");
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            document.getElementById('status-box').innerHTML = "✅ Supabase Library Siap. Mode: " + (location.protocol === 'file:' ? '⚠️ FILE LOCAL (Hashing mungkin gagal)' : '🌐 ONLINE/SERVER');
+            document.getElementById('status-box').className = "bg-green-100 p-3 mb-5 text-sm rounded";
+        } catch (e) {
+            alert("CRITICAL ERROR: " + e.message);
+            document.getElementById('status-box').innerHTML = "❌ Error: " + e.message;
+            document.getElementById('status-box').className = "bg-red-100 p-3 mb-5 text-sm rounded";
+        }
+
+        // --- 2. FUNGSI HASHING (Dengan Error Handling) ---
+        async function getHash(file) {
+            if (!file) return null;
+            try {
+                if (!crypto || !crypto.subtle) {
+                    throw new Error("Browser Anda memblokir fitur Crypto. Harap gunakan HTTPS atau Localhost (jangan buka file:// langsung).");
+                }
+                const buffer = await file.arrayBuffer();
+                const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+                return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+            } catch (err) {
+                alert("HASHING ERROR: " + err.message);
+                return null;
+            }
+        }
+
+        // --- 3. PROSES VERIFIKASI ---
+        async function processVerify() {
+            const input = document.getElementById('file-verify');
+            const resultDiv = document.getElementById('result-verify');
+            
+            if (!input.files[0]) return alert("Pilih file dulu!");
+            
+            resultDiv.innerHTML = '<div class="loader"></div> Memeriksa database...';
+
+            const hash = await getHash(input.files[0]);
+            if (!hash) return; // Stop jika hashing gagal
+
+            try {
+                // Debugging log
+                console.log("Mencari hash:", hash);
+
+                const { data, error } = await supabase
+                    .from('documents') // Pastikan nama tabel di supabase adalah 'documents'
+                    .select('*')
+                    .eq('hash', hash)
+                    .maybeSingle(); // Gunakan maybeSingle agar tidak error jika kosong
+
+                if (error) throw error;
+
+                if (!data) {
+                    resultDiv.innerHTML = `<div class="p-3 bg-red-100 text-red-700 rounded">❌ <b>Dokumen Tidak Dikenali/Palsu</b><br><small>${hash}</small></div>`;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="p-3 bg-green-100 text-green-700 rounded">
+                            ✅ <b>Dokumen ASLI</b>
+                            <ul class="mt-2 text-sm list-disc pl-4">
+                                <li>Nama: ${data.owner_name}</li>
+                                <li>NIK: ${data.owner_nik}</li>
+                                <li>Email: ${data.owner_email}</li>
+                            </ul>
+                        </div>`;
+                }
+            } catch (err) {
+                alert("DATABASE ERROR: " + err.message);
+                resultDiv.innerHTML = "Error koneksi.";
+            }
+        }
+
+        // --- 4. PROSES REGISTRASI ---
+        async function processRegister() {
+            const input = document.getElementById('file-register');
+            if (!input.files[0]) return alert("Pilih file dulu!");
+
+            const hash = await getHash(input.files[0]);
+            if (!hash) return;
+
+            document.getElementById('hash-preview').innerText = hash;
+
+            const name = document.getElementById('reg-name').value;
+            const nik = document.getElementById('reg-nik').value;
+            const email = document.getElementById('reg-email').value;
+            const desc = document.getElementById('reg-desc').value;
+
+            if (!name || !nik) return alert("Isi Nama dan NIK!");
+
+            try {
+                const { error } = await supabase.from('documents').insert([{
+                    hash: hash,
+                    owner_name: name,
+                    owner_nik: nik,
+                    owner_email: email,
+                    description: desc
+                }]);
+
+                if (error) throw error;
+                
+                alert("✅ Sukses! Dokumen terdaftar.");
+                location.reload();
+
+            } catch (err) {
+                alert("GAGAL SIMPAN: " + err.message + "\n\nTips: Cek apakah tabel 'documents' sudah dibuat di Supabase?");
+            }
+        }
+
+        // --- 5. UI TABS ---
+        function switchTab(tab) {
+            document.getElementById('view-verify').classList.toggle('hidden', tab !== 'verify');
+            document.getElementById('view-register').classList.toggle('hidden', tab !== 'register');
+        }
+    </script>
+</body>
+</html>
