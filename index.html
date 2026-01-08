@@ -3,170 +3,162 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocuVerify - Debug Mode</title>
+    <title>DocuVerify - Firebase Cloud</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: sans-serif; background-color: #f3f4f6; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #0d47a1; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: none; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .hash-box { background: #f1f1f1; padding: 10px; font-family: monospace; font-size: 13px; border-radius: 4px; word-break: break-all; }
     </style>
 </head>
-<body class="p-5">
+<body class="bg-slate-100 min-h-screen p-4 md:p-8">
 
-    <div class="max-w-2xl mx-auto bg-white p-6 rounded shadow-lg">
-        <h1 class="text-2xl font-bold mb-4 text-center">DocuVerify (Debug Mode)</h1>
-        
-        <div id="status-box" class="bg-yellow-100 p-3 mb-5 text-sm rounded">
-            ⏳ Menghubungkan ke Supabase...
+    <div class="max-w-xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
+        <div class="bg-[#0d47a1] p-6 text-white text-center">
+            <h1 class="text-2xl font-bold">Document Verification</h1>
+            <p class="text-blue-100 text-sm">Sistem Anti Pemalsuan Dokumen (Firebase Cloud)</p>
         </div>
 
-        <div class="flex space-x-2 mb-6 border-b pb-2">
-            <button onclick="switchTab('verify')" class="px-4 py-2 font-bold text-blue-600 bg-blue-50 rounded">Verifikasi</button>
-            <button onclick="switchTab('register')" class="px-4 py-2 font-bold text-gray-600 hover:bg-gray-100 rounded">Registrasi</button>
+        <div class="flex border-b">
+            <button onclick="showTab('verify')" id="btn-v" class="flex-1 py-3 font-bold text-[#0d47a1] border-b-2 border-[#0d47a1]">Verifikasi</button>
+            <button onclick="showTab('register')" id="btn-r" class="flex-1 py-3 font-bold text-gray-400">Registrasi</button>
         </div>
 
-        <div id="view-verify">
-            <h2 class="font-bold mb-2">Cek Keaslian Dokumen</h2>
-            <input type="file" id="file-verify" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border p-2 rounded mb-4">
-            <button onclick="processVerify()" class="bg-blue-600 text-white px-4 py-2 rounded w-full hover:bg-blue-700">🔍 Cek Sekarang</button>
-            <div id="result-verify" class="mt-4"></div>
-        </div>
-
-        <div id="view-register" class="hidden">
-            <h2 class="font-bold mb-2">Daftarkan Dokumen Baru</h2>
-            <input type="file" id="file-register" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:bg-green-50 file:text-green-700 border p-2 rounded mb-4">
-            
-            <div class="bg-gray-50 p-4 rounded border">
-                <p class="text-xs font-mono text-gray-500 mb-2">Hash: <span id="hash-preview">-</span></p>
-                <input type="text" id="reg-name" placeholder="Nama Pemilik" class="w-full border p-2 rounded mb-2">
-                <input type="text" id="reg-nik" placeholder="NIK" class="w-full border p-2 rounded mb-2">
-                <input type="email" id="reg-email" placeholder="Email" class="w-full border p-2 rounded mb-2">
-                <textarea id="reg-desc" placeholder="Keterangan" class="w-full border p-2 rounded mb-2"></textarea>
-                <button onclick="processRegister()" class="bg-green-600 text-white px-4 py-2 rounded w-full hover:bg-green-700">💾 Simpan Data</button>
+        <div class="p-6">
+            <div id="tab-verify">
+                <p class="text-gray-600 mb-4 text-center">Cek keaslian dokumen digital Anda</p>
+                <input type="file" id="file-v" class="w-full border-2 border-dashed border-gray-300 p-4 rounded mb-4 hover:border-[#0d47a1] transition-colors">
+                <button onclick="handleVerify()" class="w-full bg-[#0d47a1] text-white py-3 rounded-lg font-bold hover:bg-[#08306b] shadow-md">Verify Document</button>
+                <div id="loader-v" class="loader mx-auto mt-4"></div>
+                <div id="res-v" class="mt-6"></div>
             </div>
+
+            <div id="tab-register" class="hidden">
+                <p class="text-gray-600 mb-4 text-center">Daftarkan dokumen baru ke database global</p>
+                <input type="file" id="file-r" class="w-full border-2 border-dashed border-gray-300 p-4 rounded mb-4" onchange="generateHashPreview(this)">
+                
+                <div id="form-reg" class="hidden space-y-4 border-t pt-4">
+                    <div class="text-xs font-semibold text-gray-500">SHA-256 Hash Dokumen:</div>
+                    <div id="hash-text" class="hash-box"></div>
+                    
+                    <input type="text" id="reg-name" placeholder="Nama Lengkap Pemilik" class="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    <input type="email" id="reg-email" placeholder="Email" class="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    <input type="tel" id="reg-phone" placeholder="Nomor Telepon" class="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    <textarea id="reg-address" placeholder="Alamat" class="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                    
+                    <button onclick="handleRegister()" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 shadow-md">Simpan ke Firebase</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gray-50 p-4 text-center text-xs text-gray-400 border-t">
+            Sistem Informasi Terdesentralisasi • Cloud Powered
         </div>
     </div>
 
-    <script>
-        // --- 1. SETUP SUPABASE ---
-        // MASUKKAN KUNCI ANDA DI SINI DENGAN HATI-HATI
-        const SUPABASE_URL = 'https://lsldiwceibnojlmzsbbj.supabase.co'; 
-        const SUPABASE_KEY = 'sb_secret_p8H-hoPH0EuHsR0qTSFzfA_FwpsQCMP'; 
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // Cek Library
-        let supabase;
-        try {
-            if (!window.supabase) throw new Error("Library Supabase gagal dimuat.");
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            document.getElementById('status-box').innerHTML = "✅ Supabase Library Siap. Mode: " + (location.protocol === 'file:' ? '⚠️ FILE LOCAL (Hashing mungkin gagal)' : '🌐 ONLINE/SERVER');
-            document.getElementById('status-box').className = "bg-green-100 p-3 mb-5 text-sm rounded";
-        } catch (e) {
-            alert("CRITICAL ERROR: " + e.message);
-            document.getElementById('status-box').innerHTML = "❌ Error: " + e.message;
-            document.getElementById('status-box').className = "bg-red-100 p-3 mb-5 text-sm rounded";
+        // Konfigurasi dari Anda
+        const firebaseConfig = {
+            apiKey: "AIzaSyDVAvM3IlYJ66b-_Le7hAo4a-8cP621z3Y",
+            authDomain: "hashingdocument.firebaseapp.com",
+            projectId: "hashingdocument",
+            storageBucket: "hashingdocument.firebasestorage.app",
+            messagingSenderId: "746181476058",
+            appId: "1:746181476058:web:590b0301409d1a6fcaafe3",
+            measurementId: "G-B4QY87PLXW"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Fungsi Hashing (Client-side)
+        async function calculateHash(file) {
+            const buffer = await file.arrayBuffer();
+            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        // --- 2. FUNGSI HASHING (Dengan Error Handling) ---
-        async function getHash(file) {
-            if (!file) return null;
-            try {
-                if (!crypto || !crypto.subtle) {
-                    throw new Error("Browser Anda memblokir fitur Crypto. Harap gunakan HTTPS atau Localhost (jangan buka file:// langsung).");
-                }
-                const buffer = await file.arrayBuffer();
-                const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-                return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-            } catch (err) {
-                alert("HASHING ERROR: " + err.message);
-                return null;
-            }
-        }
-
-        // --- 3. PROSES VERIFIKASI ---
-        async function processVerify() {
-            const input = document.getElementById('file-verify');
-            const resultDiv = document.getElementById('result-verify');
+        // Logika Verifikasi
+        window.handleVerify = async () => {
+            const file = document.getElementById('file-v').files[0];
+            const res = document.getElementById('res-v');
+            if(!file) return alert("Pilih file terlebih dahulu!");
             
-            if (!input.files[0]) return alert("Pilih file dulu!");
-            
-            resultDiv.innerHTML = '<div class="loader"></div> Memeriksa database...';
-
-            const hash = await getHash(input.files[0]);
-            if (!hash) return; // Stop jika hashing gagal
+            document.getElementById('loader-v').style.display = 'block';
+            res.innerHTML = "";
 
             try {
-                // Debugging log
-                console.log("Mencari hash:", hash);
+                const hash = await calculateHash(file);
+                const docRef = doc(db, "documents", hash);
+                const docSnap = await getDoc(docRef);
 
-                const { data, error } = await supabase
-                    .from('documents') // Pastikan nama tabel di supabase adalah 'documents'
-                    .select('*')
-                    .eq('hash', hash)
-                    .maybeSingle(); // Gunakan maybeSingle agar tidak error jika kosong
-
-                if (error) throw error;
-
-                if (!data) {
-                    resultDiv.innerHTML = `<div class="p-3 bg-red-100 text-red-700 rounded">❌ <b>Dokumen Tidak Dikenali/Palsu</b><br><small>${hash}</small></div>`;
+                document.getElementById('loader-v').style.display = 'none';
+                
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    res.innerHTML = `
+                        <div class="p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg">
+                            <b class="text-lg">✔ DOKUMEN ASLI</b>
+                            <div class="mt-3 text-sm space-y-1">
+                                <p><b>Pemilik:</b> ${data.name}</p>
+                                <p><b>Email:</b> ${data.email}</p>
+                                <p><b>Telepon:</b> ${data.phone}</p>
+                                <p><b>Alamat:</b> ${data.address}</p>
+                                <p class="text-xs text-gray-500 mt-2">Didaftarkan pada: ${new Date(data.timestamp).toLocaleString()}</p>
+                            </div>
+                        </div>`;
                 } else {
-                    resultDiv.innerHTML = `
-                        <div class="p-3 bg-green-100 text-green-700 rounded">
-                            ✅ <b>Dokumen ASLI</b>
-                            <ul class="mt-2 text-sm list-disc pl-4">
-                                <li>Nama: ${data.owner_name}</li>
-                                <li>NIK: ${data.owner_nik}</li>
-                                <li>Email: ${data.owner_email}</li>
-                            </ul>
+                    res.innerHTML = `
+                        <div class="p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg">
+                            <b>❌ DOKUMEN PALSU / TIDAK TERDAFTAR</b>
+                            <p class="text-xs mt-2">Hash: ${hash}</p>
                         </div>`;
                 }
-            } catch (err) {
-                alert("DATABASE ERROR: " + err.message);
-                resultDiv.innerHTML = "Error koneksi.";
+            } catch (e) {
+                alert("Kesalahan: " + e.message);
+                document.getElementById('loader-v').style.display = 'none';
             }
-        }
+        };
 
-        // --- 4. PROSES REGISTRASI ---
-        async function processRegister() {
-            const input = document.getElementById('file-register');
-            if (!input.files[0]) return alert("Pilih file dulu!");
+        // Logika Registrasi
+        let currentHash = "";
+        window.generateHashPreview = async (input) => {
+            if(!input.files[0]) return;
+            currentHash = await calculateHash(input.files[0]);
+            document.getElementById('hash-text').innerText = currentHash;
+            document.getElementById('form-reg').classList.remove('hidden');
+        };
 
-            const hash = await getHash(input.files[0]);
-            if (!hash) return;
-
-            document.getElementById('hash-preview').innerText = hash;
-
+        window.handleRegister = async () => {
             const name = document.getElementById('reg-name').value;
-            const nik = document.getElementById('reg-nik').value;
             const email = document.getElementById('reg-email').value;
-            const desc = document.getElementById('reg-desc').value;
+            const phone = document.getElementById('reg-phone').value;
+            const address = document.getElementById('reg-address').value;
 
-            if (!name || !nik) return alert("Isi Nama dan NIK!");
+            if(!name || !email) return alert("Mohon isi Nama dan Email!");
 
             try {
-                const { error } = await supabase.from('documents').insert([{
-                    hash: hash,
-                    owner_name: name,
-                    owner_nik: nik,
-                    owner_email: email,
-                    description: desc
-                }]);
-
-                if (error) throw error;
-                
-                alert("✅ Sukses! Dokumen terdaftar.");
+                // Simpan ke Firestore (Pengganti validators.json dan original_hash.txt)
+                await setDoc(doc(db, "documents", currentHash), {
+                    name, email, phone, address,
+                    hash: currentHash,
+                    timestamp: new Date().toISOString()
+                });
+                alert("✔ Sukses! Dokumen telah terdaftar secara global.");
                 location.reload();
+            } catch (e) { alert("Gagal menyimpan: " + e.message); }
+        };
 
-            } catch (err) {
-                alert("GAGAL SIMPAN: " + err.message + "\n\nTips: Cek apakah tabel 'documents' sudah dibuat di Supabase?");
-            }
-        }
-
-        // --- 5. UI TABS ---
-        function switchTab(tab) {
-            document.getElementById('view-verify').classList.toggle('hidden', tab !== 'verify');
-            document.getElementById('view-register').classList.toggle('hidden', tab !== 'register');
-        }
+        // Tab Switcher
+        window.showTab = (tab) => {
+            document.getElementById('tab-verify').classList.toggle('hidden', tab !== 'verify');
+            document.getElementById('tab-register').classList.toggle('hidden', tab !== 'register');
+            document.getElementById('btn-v').className = tab === 'verify' ? "flex-1 py-3 font-bold text-[#0d47a1] border-b-2 border-[#0d47a1]" : "flex-1 py-3 font-bold text-gray-400";
+            document.getElementById('btn-r').className = tab === 'register' ? "flex-1 py-3 font-bold text-[#0d47a1] border-b-2 border-[#0d47a1]" : "flex-1 py-3 font-bold text-gray-400";
+        };
     </script>
 </body>
 </html>
